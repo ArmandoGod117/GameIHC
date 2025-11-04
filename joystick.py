@@ -76,11 +76,11 @@ def run_game(screen):
     WIDTH, HEIGHT = screen.get_size()
     pygame.display.set_caption("Scrat Happy - En Juego")
 
-    OBJ_COLOR = (240, 180, 90)
-    JOYSTICK_BASE_COLOR = (100, 100, 100)
+    JOYSTICK_BASE_COLOR = (100, 100, 100) 
     JOYSTICK_HANDLE_COLOR = (200, 200, 200)
-    OBSTACLE_COLOR = (200, 50, 50)
-    TARGET_COLOR = (50, 200, 50)
+    
+    # OBSTACLE_COLOR = (200, 50, 50) # Ya no es necesario, usaremos la imagen
+    # TARGET_COLOR = (50, 200, 50) # Ya no es necesario, usaremos la imagen
     FPS = 60
     SPEED = 5
 
@@ -95,29 +95,51 @@ def run_game(screen):
 
     # --- Clases del Juego ---
     class MovableShape:
-        def __init__(self, x, y, size=50, shape_type="circle"):
+        def __init__(self, x, y, size=60):
             self.x = x
             self.y = y
             self.size = size
-            self.shape_type = shape_type
+            self.original_image = None # Guardará la imagen original sin voltear
+            self.image = None # Guardará la imagen actual (volteada o no)
+            self.facing_right = False # True si mira a la derecha, False si mira a la izquierda
+
+            try:
+                self.original_image = pygame.image.load("assets/Scrat.png").convert_alpha()
+                self.original_image = pygame.transform.scale(self.original_image, (self.size, self.size))
+                self.image = self.original_image # La imagen inicial es la original
+            except pygame.error as e:
+                print(f"No se pudo cargar la imagen de Scrat: {e}")
+                self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+                pygame.draw.rect(self.image, (240, 180, 90), self.image.get_rect())
+
+        def update_image_orientation(self, dx):
+            if dx > 0 and not self.facing_right: # Moviéndose a la derecha y actualmente mirando a la izquierda
+                self.image = pygame.transform.flip(self.original_image, True, False) # Voltear horizontalmente
+                self.facing_right = True
+            elif dx < 0 and self.facing_right: # Moviéndose a la izquierda y actualmente mirando a la derecha
+                self.image = self.original_image # Restaurar la imagen original (mirando a la izquierda)
+                self.facing_right = False
+            # Si dx == 0, o si ya está en la orientación correcta, no hacemos nada.
+            # Para arriba/abajo (dy), la orientación horizontal no cambia.
 
         def draw(self, surface):
-            if self.shape_type == "circle":
-                pygame.draw.circle(surface, OBJ_COLOR, (int(self.x), int(self.y)), self.size // 2)
-            else:
-                rect = pygame.Rect(0, 0, self.size, self.size)
-                rect.center = (int(self.x), int(self.y))
-                pygame.draw.rect(surface, OBJ_COLOR, rect, border_radius=8)
+            image_rect = self.image.get_rect(center=(int(self.x), int(self.y)))
+            surface.blit(self.image, image_rect)
 
         def move(self, dx, dy):
+            # Actualiza la orientación de la imagen antes de mover
+            self.update_image_orientation(dx)
+
             self.x += dx
             self.y += dy
-            half = self.size // 2
-            self.x = max(half, min(WIDTH - half, self.x))
-            self.y = max(half, min(HEIGHT - half, self.y))
+            half_width = self.image.get_width() // 2
+            half_height = self.image.get_height() // 2
+            self.x = max(half_width, min(WIDTH - half_width, self.x))
+            self.y = max(half_height, min(HEIGHT - half_height, self.y))
 
         def get_rect(self):
-            return pygame.Rect(self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
+            return self.image.get_rect(center=(int(self.x), int(self.y)))
+
 
     class Joystick:
         def __init__(self, x, y, radius=50):
@@ -157,31 +179,43 @@ def run_game(screen):
             self.x = x
             self.y = y
             self.size = size
+            try:
+                self.image = pygame.image.load("assets/Tigre.png").convert_alpha()
+                self.image = pygame.transform.scale(self.image, (self.size, self.size))
+            except pygame.error as e:
+                print(f"No se pudo cargar la imagen de Tigre.png: {e}")
+                self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+                pygame.draw.rect(self.image, (200, 50, 50), self.image.get_rect())
 
         def draw(self, surface):
-            rect = pygame.Rect(0, 0, self.size, self.size)
-            rect.center = (int(self.x), int(self.y))
-            pygame.draw.rect(surface, OBSTACLE_COLOR, rect)
+            image_rect = self.image.get_rect(center=(int(self.x), int(self.y)))
+            surface.blit(self.image, image_rect)
 
         def get_rect(self):
-            return pygame.Rect(self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
+            return self.image.get_rect(center=(int(self.x), int(self.y)))
 
     class Target:
         def __init__(self, x, y, size=50):
             self.x = x
             self.y = y
             self.size = size
+            try:
+                self.image = pygame.image.load("assets/Nue.png").convert_alpha()
+                self.image = pygame.transform.scale(self.image, (self.size, self.size))
+            except pygame.error as e:
+                print(f"No se pudo cargar la imagen de Nue.png: {e}")
+                self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+                pygame.draw.rect(self.image, (50, 200, 50), self.image.get_rect())
 
         def draw(self, surface):
-            rect = pygame.Rect(0, 0, self.size, self.size)
-            rect.center = (int(self.x), int(self.y))
-            pygame.draw.rect(surface, TARGET_COLOR, rect)
+            image_rect = self.image.get_rect(center=(int(self.x), int(self.y)))
+            surface.blit(self.image, image_rect)
 
         def get_rect(self):
-            return pygame.Rect(self.x - self.size // 2, self.y - self.size // 2, self.size, self.size)
+            return self.image.get_rect(center=(int(self.x), int(self.y)))
 
     # --- Inicialización ---
-    shape = MovableShape(WIDTH // 2, HEIGHT // 2, size=60, shape_type="circle")
+    shape = MovableShape(WIDTH // 2, HEIGHT // 2, size=60)
     joystick = Joystick(WIDTH // 2, HEIGHT - 100, radius=60)
     move_vector = (0, 0)
     obstacles = []
@@ -298,7 +332,7 @@ def run_game(screen):
                 dx = (dx / mag) * SPEED
                 dy = (dy / mag) * SPEED
 
-            shape.move(dx, dy)
+            shape.move(dx, dy) # <--- Aquí se llama al nuevo método move
             shape_rect = shape.get_rect()
 
             for obs in obstacles:
@@ -368,4 +402,3 @@ while True:
         pygame.display.set_caption("Scrat Happy")
 
     pygame.display.flip()
-
