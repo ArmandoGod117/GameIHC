@@ -79,8 +79,6 @@ def run_game(screen):
     JOYSTICK_BASE_COLOR = (100, 100, 100) 
     JOYSTICK_HANDLE_COLOR = (200, 200, 200)
     
-    # OBSTACLE_COLOR = (200, 50, 50) # Ya no es necesario, usaremos la imagen
-    # TARGET_COLOR = (50, 200, 50) # Ya no es necesario, usaremos la imagen
     FPS = 60
     SPEED = 5
 
@@ -99,37 +97,33 @@ def run_game(screen):
             self.x = x
             self.y = y
             self.size = size
-            self.original_image = None # Guardará la imagen original sin voltear
-            self.image = None # Guardará la imagen actual (volteada o no)
-            self.facing_right = False # True si mira a la derecha, False si mira a la izquierda
+            self.original_image = None
+            self.image = None
+            self.facing_right = False
 
             try:
                 self.original_image = pygame.image.load("assets/Scrat.png").convert_alpha()
                 self.original_image = pygame.transform.scale(self.original_image, (self.size, self.size))
-                self.image = self.original_image # La imagen inicial es la original
+                self.image = self.original_image
             except pygame.error as e:
                 print(f"No se pudo cargar la imagen de Scrat: {e}")
                 self.image = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
                 pygame.draw.rect(self.image, (240, 180, 90), self.image.get_rect())
 
         def update_image_orientation(self, dx):
-            if dx > 0 and not self.facing_right: # Moviéndose a la derecha y actualmente mirando a la izquierda
-                self.image = pygame.transform.flip(self.original_image, True, False) # Voltear horizontalmente
+            if dx > 0 and not self.facing_right:
+                self.image = pygame.transform.flip(self.original_image, True, False)
                 self.facing_right = True
-            elif dx < 0 and self.facing_right: # Moviéndose a la izquierda y actualmente mirando a la derecha
-                self.image = self.original_image # Restaurar la imagen original (mirando a la izquierda)
+            elif dx < 0 and self.facing_right:
+                self.image = self.original_image
                 self.facing_right = False
-            # Si dx == 0, o si ya está en la orientación correcta, no hacemos nada.
-            # Para arriba/abajo (dy), la orientación horizontal no cambia.
 
         def draw(self, surface):
             image_rect = self.image.get_rect(center=(int(self.x), int(self.y)))
             surface.blit(self.image, image_rect)
 
         def move(self, dx, dy):
-            # Actualiza la orientación de la imagen antes de mover
             self.update_image_orientation(dx)
-
             self.x += dx
             self.y += dy
             half_width = self.image.get_width() // 2
@@ -220,6 +214,7 @@ def run_game(screen):
     move_vector = (0, 0)
     obstacles = []
     targets = []
+    score = 0  # Contador de nueces/bellotas
 
     def generate_objects():
         nonlocal obstacles, targets
@@ -237,7 +232,7 @@ def run_game(screen):
                 return True
             return False
 
-        num_obstacles = random.randint(2, 3)
+        num_obstacles = 4  # Siempre 4 tigres
         for _ in range(num_obstacles):
             while True:
                 x = random.randint(50, WIDTH - 50)
@@ -259,25 +254,74 @@ def run_game(screen):
 
     generate_objects()
 
-    def game_over():
-        print("💥 ¡Has chocado! Reiniciando...")
+    def reset_game():
+        nonlocal score
         shape.x = WIDTH // 2
         shape.y = HEIGHT // 2
         joystick.reset()
+        score = 0
         generate_objects()
 
-    def win():
-        print("🎉 ¡Ganaste! 🎉")
-        shape.x = WIDTH // 2
-        shape.y = HEIGHT // 2
-        joystick.reset()
-        generate_objects()
+    def game_over():
+        print("💥 ¡Has chocado!")
+        return "game_over"
+
+    def collect_nut():
+        nonlocal score, obstacles
+        print("🎉 ¡Agarraste una nuez!")
+        score += 1
+        if score >= 10:
+            return "victory"
+        
+        # Reposicionar todos los tigres en lugares aleatorios
+        obstacles.clear()
+        for _ in range(4):
+            while True:
+                x = random.randint(50, WIDTH - 50)
+                y = random.randint(50, HEIGHT - 150)
+                size = random.randint(40, 90)
+                new_obstacle = Obstacle(x, y, size)
+                valid = True
+                # Verificar que no se sobreponga con otros tigres
+                for obj in obstacles:
+                    if new_obstacle.get_rect().colliderect(obj.get_rect()):
+                        valid = False
+                        break
+                # Verificar que no esté sobre el personaje
+                if new_obstacle.get_rect().colliderect(shape.get_rect()):
+                    valid = False
+                if valid:
+                    obstacles.append(new_obstacle)
+                    break
+        
+        # Generar nueva nuez
+        while True:
+            x = random.randint(50, WIDTH - 50)
+            y = random.randint(50, HEIGHT - 150)
+            size = random.randint(50, 70)
+            new_target = Target(x, y, size)
+            valid = True
+            for obj in obstacles:
+                if new_target.get_rect().colliderect(obj.get_rect()):
+                    valid = False
+                    break
+            if new_target.get_rect().colliderect(shape.get_rect()):
+                valid = False
+            if valid:
+                targets.append(new_target)
+                break
+        return "playing"
 
     game_state = "playing"
     running = True
     button_pause_yes = pygame.Rect(WIDTH//2 - 220, HEIGHT//2 + 20, 200, 60)
     button_pause_no = pygame.Rect(WIDTH//2 + 20, HEIGHT//2 + 20, 200, 60)
+    button_gameover_replay = pygame.Rect(WIDTH//2 - 220, HEIGHT//2 + 20, 200, 60)
+    button_gameover_menu = pygame.Rect(WIDTH//2 + 20, HEIGHT//2 + 20, 200, 60)
+    button_victory_menu = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 60)
     button_pressed_pause = None
+    button_pressed_gameover = None
+    button_pressed_victory = None
 
     while running:
         dt = clock.tick(FPS)
@@ -313,6 +357,27 @@ def run_game(screen):
                     elif button_pressed_pause == "no" and button_pause_no.collidepoint(event.pos):
                         game_state = "playing"
                     button_pressed_pause = None
+            elif game_state == "game_over":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if button_gameover_replay.collidepoint(event.pos):
+                        button_pressed_gameover = "replay"
+                    elif button_gameover_menu.collidepoint(event.pos):
+                        button_pressed_gameover = "menu"
+                if event.type == pygame.MOUSEBUTTONUP:
+                    if button_pressed_gameover == "replay" and button_gameover_replay.collidepoint(event.pos):
+                        reset_game()
+                        game_state = "playing"
+                    elif button_pressed_gameover == "menu" and button_gameover_menu.collidepoint(event.pos):
+                        running = False
+                    button_pressed_gameover = None
+            elif game_state == "victory":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if button_victory_menu.collidepoint(event.pos):
+                        button_pressed_victory = "menu"
+                if event.type == pygame.MOUSEBUTTONUP:
+                    if button_pressed_victory == "menu" and button_victory_menu.collidepoint(event.pos):
+                        running = False
+                    button_pressed_victory = None
 
         if game_state == "playing":
             keys = pygame.key.get_pressed()
@@ -332,21 +397,28 @@ def run_game(screen):
                 dx = (dx / mag) * SPEED
                 dy = (dy / mag) * SPEED
 
-            shape.move(dx, dy) # <--- Aquí se llama al nuevo método move
+            shape.move(dx, dy)
             shape_rect = shape.get_rect()
 
             for obs in obstacles:
                 if shape_rect.colliderect(obs.get_rect()):
-                    game_over()
-            for target in targets:
+                    game_state = game_over()
+            
+            for target in targets[:]:
                 if shape_rect.colliderect(target.get_rect()):
-                    win()
+                    targets.remove(target)
+                    result = collect_nut()
+                    if result == "victory":
+                        game_state = "victory"
+                    break
 
+        # Dibujar fondo
         if background:
             screen.blit(background, (0, 0))
         else:
             screen.fill((30, 30, 40))
 
+        # Dibujar objetos del juego
         for obs in obstacles:
             obs.draw(screen)
         for target in targets:
@@ -355,6 +427,16 @@ def run_game(screen):
         if joystick:
             joystick.draw(screen)
 
+        # Dibujar contador de nueces
+        if game_state == "playing":
+            font_score = pygame.font.Font(None, 60)
+            score_text = font_score.render(f"Nueces: {score}/10", True, (255, 255, 255))
+            score_bg = pygame.Surface((score_text.get_width() + 30, score_text.get_height() + 20), pygame.SRCALPHA)
+            pygame.draw.rect(score_bg, (0, 0, 0, 150), score_bg.get_rect(), border_radius=15)
+            screen.blit(score_bg, (WIDTH//2 - score_text.get_width()//2 - 15, 20))
+            screen.blit(score_text, (WIDTH//2 - score_text.get_width()//2, 30))
+
+        # Pantalla de pausa
         if game_state == "paused":
             overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 180))
@@ -367,6 +449,41 @@ def run_game(screen):
             screen.blit(text_pausa, text_rect)
             draw_styled_button(screen, "Sí, Salir", button_pause_yes, button_pressed_pause == "yes")
             draw_styled_button(screen, "No, Seguir", button_pause_no, button_pressed_pause == "no")
+
+        # Pantalla de Game Over
+        if game_state == "game_over":
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            screen.blit(overlay, (0, 0))
+            popup_rect = pygame.Rect(WIDTH//2 - 250, HEIGHT//2 - 120, 500, 260)
+            pygame.draw.rect(screen, (60, 30, 30), popup_rect, border_radius=20)
+            font_gameover = pygame.font.Font(None, 70)
+            text_gameover = font_gameover.render("¡Perdiste!", True, (255, 100, 100))
+            text_rect = text_gameover.get_rect(centerx=WIDTH//2, y=HEIGHT//2 - 90)
+            screen.blit(text_gameover, text_rect)
+            font_info = pygame.font.Font(None, 40)
+            text_info = font_info.render(f"Te atrapó el tigre", True, (255, 255, 255))
+            text_info_rect = text_info.get_rect(centerx=WIDTH//2, y=HEIGHT//2 - 30)
+            screen.blit(text_info, text_info_rect)
+            draw_styled_button(screen, "Reintentar", button_gameover_replay, button_pressed_gameover == "replay")
+            draw_styled_button(screen, "Menú", button_gameover_menu, button_pressed_gameover == "menu")
+
+        # Pantalla de Victoria
+        if game_state == "victory":
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 200))
+            screen.blit(overlay, (0, 0))
+            popup_rect = pygame.Rect(WIDTH//2 - 250, HEIGHT//2 - 120, 500, 240)
+            pygame.draw.rect(screen, (30, 60, 30), popup_rect, border_radius=20)
+            font_victory = pygame.font.Font(None, 70)
+            text_victory = font_victory.render("¡Ganaste!", True, (100, 255, 100))
+            text_rect = text_victory.get_rect(centerx=WIDTH//2, y=HEIGHT//2 - 90)
+            screen.blit(text_victory, text_rect)
+            font_info = pygame.font.Font(None, 40)
+            text_info = font_info.render("🎉 Recolectaste 10 nueces 🎉", True, (255, 255, 255))
+            text_info_rect = text_info.get_rect(centerx=WIDTH//2, y=HEIGHT//2 - 30)
+            screen.blit(text_info, text_info_rect)
+            draw_styled_button(screen, "Menú", button_victory_menu, button_pressed_victory == "menu")
 
         pygame.display.flip()
 
