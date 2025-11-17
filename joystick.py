@@ -8,6 +8,28 @@ pygame.init()
 pygame.font.init()
 pygame.mixer.init()
 
+# --- Efectos de Sonido ---
+DEATH_SOUND = None
+HIT_SOUND = None
+COLLECT_SOUND = None
+try:
+    DEATH_SOUND = pygame.mixer.Sound("music/muerte.mp3")
+    DEATH_SOUND.set_volume(0.8)
+except pygame.error as e:
+    print(f"No se pudo cargar el sonido de muerte: {e}")
+
+try:
+    HIT_SOUND = pygame.mixer.Sound("music/tiger-roar-loudly-193229.mp3")
+    HIT_SOUND.set_volume(0.7)
+except pygame.error as e:
+    print(f"No se pudo cargar el sonido de colisión: {e}")
+
+try:
+    COLLECT_SOUND = pygame.mixer.Sound("music/retro-coin-1-236677.mp3")
+    COLLECT_SOUND.set_volume(0.7)
+except pygame.error as e:
+    print(f"No se pudo cargar el sonido de recoger objetivo: {e}")
+
 # --- Constantes Globales de Pantalla ---
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
@@ -19,7 +41,7 @@ pygame.display.set_caption("Scrat Happy")
 # Configura la música (una sola vez)
 try:
     pygame.mixer.music.load("music/musicafondo.mp3")
-    volumen = 0.5
+    volumen = 0.1
     pygame.mixer.music.set_volume(volumen)
     pygame.mixer.music.play(-1)
 except pygame.error as e:
@@ -263,11 +285,23 @@ def run_game(screen):
         generate_objects()
 
     def game_over():
+        # Reproducir sonido de muerte si está disponible
+        try:
+            if DEATH_SOUND:
+                DEATH_SOUND.play()
+        except Exception:
+            pass
         print("💥 ¡Has chocado!")
         return "game_over"
 
     def collect_nut():
         nonlocal score, obstacles
+        # Reproducir sonido de recoger objetivo
+        try:
+            if COLLECT_SOUND:
+                COLLECT_SOUND.play()
+        except Exception:
+            pass
         print("🎉 ¡Agarraste una nuez!")
         score += 1
         if score >= 10:
@@ -402,7 +436,14 @@ def run_game(screen):
 
             for obs in obstacles:
                 if shape_rect.colliderect(obs.get_rect()):
+                    # Reproducir sonido de impacto (tigres) si está disponible
+                    try:
+                        if HIT_SOUND:
+                            HIT_SOUND.play()
+                    except Exception:
+                        pass
                     game_state = game_over()
+                    break
             
             for target in targets[:]:
                 if shape_rect.colliderect(target.get_rect()):
